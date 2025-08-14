@@ -1,0 +1,311 @@
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+
+-- Teleport Points
+local points = {
+    Vector3.new(1000.44, 15.36, -1025.04),
+    Vector3.new(382.83, 308.68, -182.04),
+    Vector3.new(103.16, 410.11, 619.50),
+    Vector3.new(11.79, 600.18, 978.04),
+    Vector3.new(870.35, 864.69, 575.42),
+    Vector3.new(1615.91, 1079.17, 156.54),
+    Vector3.new(2966.59, 1527.05, 700.46),
+    Vector3.new(1819.73, 1979.28, 2166.26),
+}
+
+-- Settings
+local autoTeleport = true
+local teleportDelay = 3
+local resetDelay = 3
+local offsetRange = 2
+local lastCheckpoint = 1
+local keyToggle = Enum.KeyCode.K
+local hrp
+
+-- Setup character
+local function setupCharacter(char)
+    hrp = char:WaitForChild("HumanoidRootPart")
+end
+
+-- Brutal teleport
+local function brutalTeleport(target)
+    if not hrp then return end
+    local offset = Vector3.new(
+        math.random(-offsetRange*100, offsetRange*100)/100,
+        0,
+        math.random(-offsetRange*100, offsetRange*100)/100
+    )
+    local destination = target + offset
+    local tween = TweenService:Create(hrp, TweenInfo.new(1, Enum.EasingStyle.Linear), {CFrame = CFrame.new(destination)})
+    tween:Play()
+    tween.Completed:Wait()
+    hrp.Velocity = Vector3.new(0,5,0)
+end
+
+-- Visual effects for checkpoint
+local function checkpointVisualEffect()
+    if not hrp then return end
+
+    -- Glow effect
+    local glow = Instance.new("SelectionBox")
+    glow.Adornee = hrp
+    glow.LineThickness = 0.05
+    glow.Color3 = Color3.fromRGB(255, 215, 0)
+    glow.SurfaceTransparency = 0.8
+    glow.Parent = hrp
+    TweenService:Create(glow, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {SurfaceTransparency = 1}):Play()
+    delay(0.6, function() glow:Destroy() end)
+
+    -- Particle effect
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.CanCollide = false
+    part.Size = Vector3.new(1,1,1)
+    part.CFrame = hrp.CFrame
+    part.Transparency = 1
+    part.Parent = Workspace
+
+    local particle = Instance.new("ParticleEmitter")
+    particle.Texture = "rbxassetid://258128463"
+    particle.Rate = 50
+    particle.Lifetime = NumberRange.new(0.5,1)
+    particle.Speed = NumberRange.new(5,10)
+    particle.VelocitySpread = 180
+    particle.Parent = part
+
+    delay(1, function() part:Destroy() end)
+end
+
+-- Enhanced notification
+local function showEnhancedNotification(text)
+    local gui = player:FindFirstChild("PlayerGui")
+    if not gui then return end
+
+    local notifGui = gui:FindFirstChild("EnhancedNotifGui")
+    if not notifGui then
+        notifGui = Instance.new("ScreenGui")
+        notifGui.Name = "EnhancedNotifGui"
+        notifGui.ResetOnSpawn = false
+        notifGui.Parent = gui
+    end
+
+    local notif = Instance.new("TextLabel")
+    notif.Size = UDim2.new(0, 250, 0, 50)
+    notif.Position = UDim2.new(1, 50, 1, 50)
+    notif.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    notif.BackgroundTransparency = 0.3
+    notif.TextColor3 = Color3.fromRGB(255,215,0)
+    notif.TextScaled = true
+    notif.Font = Enum.Font.GothamBold
+    notif.Text = text
+    notif.BorderSizePixel = 0
+    notif.AnchorPoint = Vector2.new(1,1)
+    notif.Parent = notifGui
+
+    -- Slide in
+    local slideIn = TweenService:Create(notif, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+        {Position = UDim2.new(1, -20, 1, -20)})
+    slideIn:Play()
+
+    -- Blink / scale effect
+    local scaleTween = TweenService:Create(notif, TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, true),
+        {Size = UDim2.new(0, 260, 0, 55)})
+    scaleTween:Play()
+
+    -- Sound
+    local sound = Instance.new("Sound", notif)
+    sound.SoundId = "rbxassetid://9118820140"
+    sound.Volume = 0.7
+    sound:Play()
+
+    -- Fade out
+    delay(3, function()
+        scaleTween:Cancel()
+        local slideOut = TweenService:Create(notif, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
+            {Position = UDim2.new(1, 50, 1, 50)})
+        slideOut:Play()
+        slideOut.Completed:Connect(function() notif:Destroy() end)
+    end)
+end
+
+-- Notifikasi checkpoint berhasil
+local function showCheckpointNotification(index)
+    showEnhancedNotification("Checkpoint " .. index .. " berhasil!")
+end
+
+-- Auto teleport loop
+local teleportLoop
+local function startAutoTeleport()
+    if teleportLoop then return end
+    teleportLoop = true
+    spawn(function()
+        while teleportLoop do
+            if autoTeleport and hrp then
+                for i = lastCheckpoint, #points do
+                    if not autoTeleport then break end
+                    brutalTeleport(points[i])
+                    checkpointVisualEffect()
+                    showCheckpointNotification(i) -- notifikasi checkpoint berhasil
+                    lastCheckpoint = i + 1
+                    wait(teleportDelay)
+                end
+                if lastCheckpoint > #points then
+                    showEnhancedNotification("AutoSummit MT CKPTW by Ganesha Exploit")
+                    wait(resetDelay)
+                    lastCheckpoint = 1
+                    if hrp.Parent:FindFirstChild("Humanoid") then
+                        hrp.Parent.Humanoid.Health = 0
+                    end
+                end
+            end
+            wait(1)
+        end
+    end)
+end
+
+-- UI setup
+local ScreenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+ScreenGui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame", ScreenGui)
+frame.Size = UDim2.new(0, 320, 0, 160)
+frame.Position = UDim2.new(0.5, -160, 0, 50)
+frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+frame.BorderSizePixel = 0
+frame.ClipsDescendants = true
+
+local gradient = Instance.new("UIGradient", frame)
+gradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 215, 0))
+}
+gradient.Rotation = 45
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1,0,0,60)
+title.Position = UDim2.new(0,0,0,0)
+title.Text = "Ganesha Exploit"
+title.TextScaled = true
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+
+local autoButton = Instance.new("TextButton", frame)
+autoButton.Size = UDim2.new(0,280,0,50)
+autoButton.Position = UDim2.new(0,20,0,70)
+autoButton.TextScaled = true
+autoButton.Font = Enum.Font.GothamBold
+autoButton.BackgroundColor3 = Color3.fromRGB(50,50,50)
+autoButton.TextColor3 = Color3.fromRGB(255,255,255)
+autoButton.Text = "Auto Teleport: ON"
+
+-- Gradient animation
+local btnGradient = Instance.new("UIGradient", autoButton)
+btnGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,0,0)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,215,0))
+}
+btnGradient.Rotation = 0
+spawn(function()
+    while autoButton.Parent do
+        TweenService:Create(btnGradient, TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Rotation = 360}):Play()
+        wait(2)
+        btnGradient.Rotation = 0
+    end
+end)
+
+-- Minimize button
+local minButton = Instance.new("TextButton", frame)
+minButton.Size = UDim2.new(0,40,0,30)
+minButton.Position = UDim2.new(1,-45,0,5)
+minButton.Text = "_"
+minButton.TextScaled = true
+minButton.BackgroundColor3 = Color3.fromRGB(60,60,60)
+minButton.TextColor3 = Color3.fromRGB(255,255,255)
+
+local minimized = false
+minButton.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    local targetPos = minimized and UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, frame.Position.Y.Scale, -frame.Size.Y.Offset)
+                               or UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, frame.Position.Y.Scale, 50)
+    TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetPos}):Play()
+end)
+
+-- Show/Hide UI
+local toggleButton = Instance.new("TextButton", ScreenGui)
+toggleButton.Size = UDim2.new(0,120,0,40)
+toggleButton.Position = UDim2.new(0,10,0,10)
+toggleButton.Text = "Show/Hide UI"
+toggleButton.TextScaled = true
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.BackgroundColor3 = Color3.fromRGB(50,50,50)
+toggleButton.TextColor3 = Color3.fromRGB(255,255,255)
+
+local uiVisible = true
+toggleButton.MouseButton1Click:Connect(function()
+    uiVisible = not uiVisible
+    local targetPos = uiVisible and UDim2.new(0.5,-160,0,50) or UDim2.new(0.5,-160,0,-200)
+    TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = targetPos}):Play()
+end)
+
+-- Auto toggle
+local function toggleAuto()
+    autoTeleport = not autoTeleport
+    autoButton.Text = "Auto Teleport: " .. (autoTeleport and "ON" or "OFF")
+    if autoTeleport then startAutoTeleport() end
+end
+
+autoButton.MouseButton1Click:Connect(toggleAuto)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == keyToggle then toggleAuto() end
+end)
+
+-- Draggable UI
+local dragging, dragInput, dragStart, startPos
+local function update(input)
+    local delta = input.Position - dragStart
+    frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+                               startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- Start teleport
+if player.Character then
+    setupCharacter(player.Character)
+    startAutoTeleport()
+end
+
+player.CharacterAdded:Connect(function(char)
+    setupCharacter(char)
+    startAutoTeleport()
+end)
